@@ -1,32 +1,21 @@
-TenBagger/
-├── docker-compose.yml       # 容器编排文件
-├── Dockerfile               # 镜像构建文件
-├── requirements.txt         # 依赖包
-├── config.py                # 全局配置（DB连接、API Key等）
-├── main.py                  # 程序入口（启动调度器、初始化）
-│
-├── agents/                  # 【核心】策略智能体模块
-│   ├── __init__.py
-│   ├── base.py              # 策略抽象基类
-│   ├── ma_trend.py          # 双均线趋势策略
-│   └── grid_agent.py        # 网格交易策略
-│
-├── data/                    # 数据服务模块
-│   ├── __init__.py
-│   ├── models.py            # SQLAlchemy 数据模型
-│   ├── downloader.py        # 数据下载器
-│   └── feeder.py            # 实时数据推送
-│
-├── engine/                  # 交易执行引擎
-│   ├── __init__.py
-│   ├── router.py            # 信号路由（决定发给模拟盘还是实盘）
-│   ├── broker_sim.py        # 模拟经纪商（撮合逻辑）
-│   └── risk_manager.py      # 风控模块（重要！）
-│
-├── web/                     # Web 前后端
-│   ├── api/                 # FastAPI 后端接口
-│   │   └── views.py
-│   └── ui/                  # Streamlit 或 Vue 前端页面
-│
-├── storage/                 # 本地存储（日志、数据文件）
-└── tests/   
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Framework-FastAPI-green?logo=fastapi" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Database-PostgreSQL-blue?logo=postgresql" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/Status-In%20Development-yellow" alt="Status">
+  <img src="https://img.shields.io/badge/License-MIT-red" alt="License">
+</p>
+
+<h1 align="center">🚀 TenBagger</h1>
+<h3 align="center">A Personal Quantitative Trading System Powered by AI Agents</h3>
+
+<p align="center">
+  <b>Starting with ¥10,000 capital. Target: 10x Returns.</b><br>
+  From data analysis to execution, building a robust trading engine from scratch.
+</p>
+
+---
+
+## 📖 Overview
+
+**TenBagger** is a personal quantitative trading project designed to explore systematic investing with a starting capital of ¥10,000. It integrates modern AI technologies (RAG, Agents) with traditional quantitative strate
