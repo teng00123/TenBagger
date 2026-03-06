@@ -1,10 +1,7 @@
-from web.data.data_manager import KLineDataManager
-from web.data.data_fetcher import KLineDataFetcher
+from data.data_manager import KLineDataManager
+from data.data_fetcher import KLineDataFetcher
 from datetime import datetime
 import pandas as pd
-import akshare_proxy_patch
-
-akshare_proxy_patch.install_patch("101.201.173.125", "", 30)
 
 class DataDownloader:
     """数据下载器类，负责股票数据的下载和管理"""

@@ -133,7 +133,7 @@ class TradingEngine:
         print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 执行每日收盘交易任务")
 
         # 获取当日收盘价（这里模拟获取最新价格）
-        from web.data.data_manager import KLineDataManager
+        from data.data_manager import KLineDataManager
         manager = KLineDataManager()
 
         # 获取最近一个交易日的数据
@@ -301,39 +301,43 @@ class TradingEngine:
 def demo_trading_engine():
     """演示交易引擎的使用"""
     from agents.ma_trend import MATrendStrategy
-    from web.data.data_manager import KLineDataManager
+    from data.data_manager import KLineDataManager
+    from utils.get_stock_code import get_stock_code
 
-    # 创建策略
-    strategy = MATrendStrategy({
-        'short_window': 5,
-        'long_window': 20
-    })
-    strategy.initialize()
+    stock_code_list = get_stock_code()
+    for stock_code in stock_code_list:
+        # 创建策略
+        strategy = MATrendStrategy({
+            'short_window': 5,
+            'long_window': 20,
+            'stock_code':stock_code
+        })
+        strategy.initialize()
 
-    # 创建交易引擎
-    engine = TradingEngine(strategy, initial_cash=100000.0)
+        # 创建交易引擎
+        engine = TradingEngine(strategy, initial_cash=100000.0)
 
-    # 获取历史数据
-    manager = KLineDataManager()
-    historical_data = manager.get_kline_data(
-        "000001",
-        interval='1d',
-        start_date='2024-01-01',
-        end_date='2024-12-31'
-    )
+        # 获取历史数据
+        manager = KLineDataManager()
+        historical_data = manager.get_kline_data(
+            stock_code,
+            interval='1d',
+            start_date='2024-01-01',
+            end_date='2024-12-31'
+        )
 
-    if historical_data is None or len(historical_data) == 0:
-        print("未获取到历史数据，请先下载数据")
-        return
+        if historical_data is None or len(historical_data) == 0:
+            print("未获取到历史数据，请先下载数据")
+            return
 
-    # 运行回测
-    result = engine.run_backtest(historical_data, "000001")
+        # 运行回测
+        result = engine.run_backtest(historical_data, stock_code)
 
-    # 打印结果
-    engine.print_backtest_result(result)
+        # 打印结果
+        engine.print_backtest_result(result)
 
-    # 打印当前状态
-    engine.print_current_status()
+        # 打印当前状态
+        engine.print_current_status()
 
 
 def demo_schedule():
@@ -355,7 +359,7 @@ def demo_schedule():
     # 立即执行一次（模拟收盘后运行）
     print("立即执行一次收盘任务:")
     # engine.daily_trading_job("000001")
-    engine.start_daily_schedule(symbol="000001", schedule_time="16:00")
+    engine.start_daily_schedule(symbol="000001", schedule_time="17:57")
 
     print("\n=== 定时任务说明 ===")
     print("要启动真正的定时任务，请调用: engine.start_daily_schedule(symbol='000001', schedule_time='16:00')")
@@ -364,5 +368,5 @@ def demo_schedule():
 
 if __name__ == "__main__":
     # 可以选择运行回测演示或定时任务演示
-    demo_trading_engine()
-    # demo_schedule()  # 取消注释来演示定时任务
+    # demo_trading_engine()
+    demo_schedule()  # 取消注释来演示定时任务

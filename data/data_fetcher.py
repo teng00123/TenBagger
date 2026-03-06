@@ -7,6 +7,9 @@ from datetime import datetime
 import time
 import pandas as pd
 
+import akshare_proxy_patch
+
+akshare_proxy_patch.install_patch("101.201.173.125", "", 30)
 
 
 class KLineDataFetcher:
