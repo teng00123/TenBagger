@@ -64,8 +64,8 @@ venv\Scripts\activate
 # macOS/Linux
 source venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies using poetry
+poetry install
 
 # Start service
 python main.py

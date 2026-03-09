@@ -65,7 +65,7 @@ venv\Scripts\activate
 source venv/bin/activate
 
 # 安装依赖
-pip install -r requirements.txt
+poetry install
 
 # 启动服务
 python main.py

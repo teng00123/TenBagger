@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "tenbagger"
+version = "0.1.0"
+description = ""
+authors = ["v_ttengtian <v_ttengtian@tencent.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.15"
+fastapi = "^0.135.1"
+uvicorn = "^0.41.0"
+pydantic = "^2.12.5"
+numpy = "^2.4.2"
+pandas = "^3.0.1"
+requests = "^2.32.5"
+python-dotenv = "^1.2.2"
+aiohttp = "^3.13.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
