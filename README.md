@@ -2,7 +2,10 @@
 
 🌐 **Language**: [中文](README_CN.md) | [English](README.md)
 
-A frontend-backend separated quantitative trading platform based on FastAPI + Vue 3.
+This project is a decoupled quantitative trading platform built with FastAPI + Vue 3, designed to provide a modern, modular solution for financial trading systems
+csdn.net
+. The system adopts a RESTful API architecture, where the backend handles strategy calculations, data processing, and trade execution, while the frontend provides an intuitive interactive interface. It implements features like strategy analysis, backtesting, and trade management
+. The project is under the MIT License and is currently intended for learning and research purposes only.
 
 ## Features
 
