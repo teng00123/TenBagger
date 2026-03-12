@@ -4,7 +4,11 @@
 .idea
 .codecc
 .gtm.yaml
-
+frontend/node_modules/
+backend_start.sh
+frontend_start.sh
+backend/app.log
+backend/app.pid
 pre-*-bkcodeai
 .vscode
 .python-version
