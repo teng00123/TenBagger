@@ -1,196 +1,183 @@
-# Quantitative Trading Platform
+# TenBagger — Quantitative Trading Platform
+
+[![CI Tests](https://github.com/teng00123/TenBagger/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/teng00123/TenBagger/actions/workflows/ci-tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![Vue](https://img.shields.io/badge/Vue-3.x-42b883.svg)](https://vuejs.org/)
 
 🌐 **Language**: [简体中文](README_CN.md) | [English](README.md)
 📋 **Changelog**: [Version History](CHANGELOG.md)
+🤝 **Contributing**: [Contributing Guide](CONTRIBUTING.md)
 
-This project is a decoupled quantitative trading platform built with FastAPI + Vue 3, designed to provide a modern, modular solution for financial trading systems
-csdn.net
-. The system adopts a RESTful API architecture, where the backend handles strategy calculations, data processing, and trade execution, while the frontend provides an intuitive interactive interface. It implements features like strategy analysis, backtesting, and trade management
-. The project is under the MIT License and is currently intended for learning and research purposes only.
+A decoupled quantitative trading platform built with **FastAPI + Vue 3**, providing a modern, modular solution for financial trading systems. The backend handles strategy calculations, data processing and trade execution, while the frontend delivers an intuitive interactive interface with strategy analysis, backtesting, and trade management.
+
+> ⚠️ **For learning and research purposes only. Do not use for real trading.**
 
 ## Features
 
-- ✅ **Backend**: Python + FastAPI, providing RESTful API
-- ✅ **Frontend**: Vue 3 + Element Plus, modern UI interface
-- ✅ **Trading Strategies**: 
+- ✅ **Backend**: Python + FastAPI, RESTful API
+- ✅ **Frontend**: Vue 3 + Element Plus, modern UI
+- ✅ **Trading Strategies**:
   - Moving Average Crossover Strategy (MA)
   - RSI Relative Strength Index Strategy
 - ✅ **Real-time Analysis**: Market signal detection and trading recommendations
 - ✅ **Backtesting System**: Historical performance backtesting
 - ✅ **Trade Management**: Order execution, position management, trade history
+- ✅ **Docker Support**: One-command startup with docker-compose
 
 ## Project Structure
 
 ```
-quant-trading-platform/
+TenBagger/
 ├── backend/              # Backend code
-│   ├── main.py          # FastAPI entry point
-│   ├── config.py        # Configuration file
-│   ├── requirements.txt # Python dependencies
-│   ├── strategies/      # Trading strategies
-│   │   ├── ma_strategy.py    # Moving Average strategy
-│   │   └── rsi_strategy.py   # RSI strategy
-│   ├── models/          # Data models
-│   │   └── schemas.py   # Pydantic models
-│   ├── routers/         # API routes
-│   │   ├── trading.py   # Trading related APIs
-│   │   └── strategies.py # Strategy related APIs
-│   └── utils/           # Utility functions
-│       └── data_fetcher.py # Data fetching
+│   ├── main.py           # FastAPI entry point
+│   ├── config.py         # Configuration
+│   ├── requirements.txt  # Python dependencies (pip)
+│   ├── pyproject.toml    # Python dependencies (poetry)
+│   ├── Dockerfile        # Backend container
+│   ├── strategies/       # Trading strategies
+│   │   ├── ma_strategy.py
+│   │   └── rsi_strategy.py
+│   ├── models/           # Pydantic data models
+│   ├── routers/          # API routes
+│   └── utils/            # Utility functions
 │
-├── frontend/            # Frontend code
+├── frontend/             # Frontend code (Vue 3)
 │   ├── src/
-│   │   ├── App.vue     # Main application
-│   │   ├── main.js     # Entry file
-│   │   ├── api/        # API calls
-│   │   │   └── index.js
-│   │   └── components/ # Vue components
-│   │       ├── Dashboard.vue      # Dashboard
-│   │       ├── StrategyPanel.vue  # Strategy panel
-│   │       └── TradeHistory.vue   # Trade history
-│   ├── package.json
+│   │   ├── App.vue
+│   │   ├── api/
+│   │   └── components/
+│   │       ├── Dashboard.vue
+│   │       ├── StrategyPanel.vue
+│   │       └── TradeHistory.vue
+│   ├── Dockerfile        # Frontend container (nginx)
 │   └── vite.config.js
 │
-└── README.md
+├── docker-compose.yml    # One-command full-stack startup
+├── .env.example          # Environment variable template
+├── CHANGELOG.md
+└── CONTRIBUTING.md
 ```
 
 ## Quick Start
 
-### Backend Setup
+### Option 1: Docker (Recommended)
+
+```bash
+git clone https://github.com/teng00123/TenBagger.git
+cd TenBagger
+
+cp .env.example .env
+docker-compose up --build
+```
+
+- Frontend: http://localhost:80
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+### Option 2: Manual Setup
+
+**Backend**
 
 ```bash
 cd backend
 
 # Create virtual environment (optional)
 python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
+source venv/bin/activate   # macOS/Linux
+# venv\Scripts\activate    # Windows
 
-# Install dependencies using poetry
-poetry install
+# Install dependencies
+pip install -r requirements.txt
+# Or with poetry: poetry install
+
+# Configure environment
+cp ../.env.example ../.env  # edit as needed
 
 # Start service
-python main.py
-# Or using uvicorn
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Backend service will start at http://localhost:8000
-API Documentation: http://localhost:8000/docs
+Backend: http://localhost:8000 | API Docs: http://localhost:8000/docs
 
-### Frontend Setup
+**Frontend**
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Frontend service will start at http://localhost:3000
+Frontend: http://localhost:5173
 
-## API Interfaces
+## API Reference
 
-### Trading Related
+### Trading
 
-- `GET /api/trading/account` - Get account information
-- `POST /api/trading/order` - Place trading order
-- `GET /api/trading/orders` - Get order list
-- `GET /api/trading/history` - Get trade history
-- `POST /api/trading/positions/update` - Update position prices
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/trading/account` | Get account info |
+| POST | `/api/trading/order` | Place order |
+| GET | `/api/trading/orders` | List orders |
+| GET | `/api/trading/history` | Trade history |
+| POST | `/api/trading/positions/update` | Update position prices |
 
-### Strategy Related
+### Strategies
 
-- `GET /api/strategies/list` - Get strategy list
-- `POST /api/strategies/analyze` - Analyze market signals
-- `GET /api/strategies/status/{type}/{symbol}` - Get strategy status
-- `POST /api/strategies/backtest` - Run backtest
-- `GET /api/strategies/symbols` - Get supported trading symbols
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/strategies/list` | List strategies |
+| POST | `/api/strategies/analyze` | Analyze market signals |
+| GET | `/api/strategies/status/{type}/{symbol}` | Strategy status |
+| POST | `/api/strategies/backtest` | Run backtest |
+| GET | `/api/strategies/symbols` | Supported symbols |
 
 ## Trading Strategies
 
-### 1. Moving Average Crossover Strategy (MA)
+### Moving Average Crossover (MA)
 
-**Principle**: 
-- Short-term MA crosses above long-term MA → Golden Cross → Buy signal
-- Short-term MA crosses below long-term MA → Death Cross → Sell signal
+- Short MA crosses above long MA → **Golden Cross** → Buy
+- Short MA crosses below long MA → **Death Cross** → Sell
+- Default: `short_window=5`, `long_window=20`
 
-**Parameters**:
-- `short_window`: Short-term MA period (default: 5)
-- `long_window`: Long-term MA period (default: 20)
+### RSI Strategy
 
-### 2. RSI Strategy
-
-**Principle**:
-- RSI < 30 (Oversold zone) → Buy signal
-- RSI > 70 (Overbought zone) → Sell signal
-
-**Parameters**:
-- `rsi_period`: RSI calculation period (default: 14)
-- `rsi_oversold`: Oversold line (default: 30)
-- `rsi_overbought`: Overbought line (default: 70)
+- RSI < 30 (Oversold) → **Buy signal**
+- RSI > 70 (Overbought) → **Sell signal**
+- Default: `rsi_period=14`, `rsi_oversold=30`, `rsi_overbought=70`
 
 ## Configuration
 
-Edit `backend/config.py` or create `.env` file:
+Copy `.env.example` to `.env` and customize:
 
 ```env
 API_HOST=0.0.0.0
 API_PORT=8000
 DEBUG=True
 INITIAL_CAPITAL=100000
-COMMISSION_RATE=0.0003
-DATA_SOURCE=mock
+COMMISSION_RATE=0.0003   # 0.03%
+DATA_SOURCE=mock          # mock | real
+ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-## Technology Stack
+## Tech Stack
 
-**Backend**:
-- Python 3.9+
-- FastAPI
-- Pydantic
-- NumPy
-- Pandas
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.11, FastAPI, Pydantic, NumPy, Pandas |
+| Frontend | Vue 3, Vite, Element Plus, Axios, Pinia |
+| DevOps | Docker, GitHub Actions |
 
-**Frontend**:
-- Vue 3
-- Vite
-- Element Plus
-- Axios
-- Pinia
+## Extending the Platform
 
-## Important Notes
+**Add a new strategy**: Create a file in `backend/strategies/`, implement `analyze()` and `get_current_status()`, then register in `backend/routers/strategies.py`.
 
-⚠️ **This system is for learning and research purposes only**
+**Integrate real data**: Update `backend/utils/data_fetcher.py` — supports Yahoo Finance, JoinQuant, Tushare, etc.
 
-- Currently uses mock data for backtesting and demonstration
-- Real trading requires integration with real data sources and broker APIs
-- Investment involves risks, trade with caution
-- Do not use directly for real trading
+## Contributing
 
-## Development Guide
-
-### Adding New Strategies
-
-1. Create new strategy file in `backend/strategies/`
-2. Implement `analyze()` and `get_current_status()` methods
-3. Register in `backend/routers/strategies.py`
-
-### Integrating Real Data
-
-Modify `backend/utils/data_fetcher.py`:
-- Implement `_fetch_real_data()` method
-- Can integrate with Yahoo Finance, JoinQuant, Tushare, etc.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, commit conventions, and PR guidelines.
 
 ## License
 
-MIT License
-
-## Author
-
-teng
+[MIT License](https://opensource.org/licenses/MIT) © teng
