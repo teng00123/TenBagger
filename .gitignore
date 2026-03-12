@@ -47,3 +47,9 @@ dbm-ui/.history/
 *.pfx
 secrets.yml
 secrets.yaml
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
