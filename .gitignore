@@ -4,7 +4,11 @@
 .idea
 .codecc
 .gtm.yaml
-
+frontend/node_modules/
+backend_start.sh
+frontend_start.sh
+backend/app.log
+backend/app.pid
 pre-*-bkcodeai
 .vscode
 .python-version
@@ -43,3 +47,9 @@ dbm-ui/.history/
 *.pfx
 secrets.yml
 secrets.yaml
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/

@@ -1,6 +1,7 @@
 # Quantitative Trading Platform
 
-🌐 **Language**: [中文](README_CN.md) | [English](README.md)
+🌐 **Language**: [简体中文](README_CN.md) | [English](README.md)
+📋 **Changelog**: [Version History](CHANGELOG.md)
 
 This project is a decoupled quantitative trading platform built with FastAPI + Vue 3, designed to provide a modern, modular solution for financial trading systems
 csdn.net
