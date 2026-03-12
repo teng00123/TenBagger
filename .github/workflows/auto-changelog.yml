@@ -1,0 +1,227 @@
+name: Auto Update Changelog
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'CHANGELOG.md'       # 避免更新 CHANGELOG 本身再次触发死循环
+      - '.github/workflows/**'
+
+jobs:
+  update-changelog:
+    name: Generate & Commit Changelog
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 允许写入并推送 CHANGELOG.md
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # 完整历史，确保能读取所有 commit 和 tag
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ── 获取版本信息 ───────────────────────────────────────────────
+      - name: Detect version & commit range
+        id: version
+        run: |
+          # 获取最新 tag（如无 tag 则为空）
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          # 当前日期
+          TODAY=$(date '+%Y-%m-%d')
+
+          # 本次触发的 commit SHA（短）
+          CURRENT_SHA=$(git rev-parse --short HEAD)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "no_tag=true"    >> $GITHUB_OUTPUT
+            echo "range=HEAD"     >> $GITHUB_OUTPUT
+            echo "version=Unreleased" >> $GITHUB_OUTPUT
+            echo "ℹ️ 无 tag，使用全部历史"
+          else
+            echo "no_tag=false"         >> $GITHUB_OUTPUT
+            echo "range=${LAST_TAG}..HEAD" >> $GITHUB_OUTPUT
+            echo "version=${LAST_TAG}"  >> $GITHUB_OUTPUT
+            echo "last_tag=${LAST_TAG}" >> $GITHUB_OUTPUT
+            echo "ℹ️ 最新 tag: $LAST_TAG"
+          fi
+
+          echo "today=${TODAY}"           >> $GITHUB_OUTPUT
+          echo "sha=${CURRENT_SHA}"       >> $GITHUB_OUTPUT
+
+      # ── 生成新的 changelog 条目 ────────────────────────────────────
+      - name: Generate changelog entry
+        id: changelog
+        run: |
+          RANGE="${{ steps.version.outputs.range }}"
+          TODAY="${{ steps.version.outputs.today }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          NO_TAG="${{ steps.version.outputs.no_tag }}"
+
+          # 拉取 commits（跳过 merge commits 和 bot commits）
+          if [ "$NO_TAG" = "true" ]; then
+            COMMITS=$(git log --pretty=format:"%h|%s|%an|%ad" --date=short --no-merges \
+              --invert-grep --grep="^docs: update CHANGELOG" \
+              --invert-grep --grep="github-actions\[bot\]" \
+              HEAD 2>/dev/null || echo "")
+          else
+            COMMITS=$(git log --pretty=format:"%h|%s|%an|%ad" --date=short --no-merges \
+              --invert-grep --grep="^docs: update CHANGELOG" \
+              --invert-grep --grep="github-actions\[bot\]" \
+              "$RANGE" 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "has_new_commits=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ 无新 commit，跳过更新"
+            exit 0
+          fi
+
+          echo "has_new_commits=true" >> $GITHUB_OUTPUT
+
+          # 按 Conventional Commits 分类
+          FEATURES=""
+          FIXES=""
+          DOCS=""
+          STYLE=""
+          REFACTOR=""
+          PERF=""
+          TESTS=""
+          BUILD=""
+          CI=""
+          CHORE=""
+          OTHER=""
+
+          while IFS='|' read -r hash subject author date; do
+            [ -z "$hash" ] && continue
+            entry="- ${subject} ([${hash}]) — ${author} · ${date}"
+
+            case "$subject" in
+              feat*|feature*)   FEATURES="$FEATURES\n$entry" ;;
+              fix*|bugfix*)     FIXES="$FIXES\n$entry" ;;
+              docs*)            DOCS="$DOCS\n$entry" ;;
+              style*)           STYLE="$STYLE\n$entry" ;;
+              refactor*)        REFACTOR="$REFACTOR\n$entry" ;;
+              perf*)            PERF="$PERF\n$entry" ;;
+              test*)            TESTS="$TESTS\n$entry" ;;
+              build*)           BUILD="$BUILD\n$entry" ;;
+              ci*)              CI="$CI\n$entry" ;;
+              chore*)           CHORE="$CHORE\n$entry" ;;
+              *)                OTHER="$OTHER\n$entry" ;;
+            esac
+          done <<< "$COMMITS"
+
+          # 检查 Breaking Changes
+          if [ "$NO_TAG" = "true" ]; then
+            BREAKING=$(git log --pretty=format:"%h|%B" --no-merges HEAD 2>/dev/null \
+              | grep -i "BREAKING CHANGE\|!:" || true)
+          else
+            BREAKING=$(git log --pretty=format:"%h|%B" --no-merges "$RANGE" 2>/dev/null \
+              | grep -i "BREAKING CHANGE\|!:" || true)
+          fi
+
+          # 组装新的 changelog 条目
+          NEW_ENTRY="## [${VERSION}] — ${TODAY}\n"
+
+          if [ -n "$BREAKING" ]; then
+            NEW_ENTRY="${NEW_ENTRY}\n### 💥 Breaking Changes\n"
+            NEW_ENTRY="${NEW_ENTRY}$(echo "$BREAKING" | sed 's/^/- /')\n"
+          fi
+
+          [ -n "$FEATURES" ]  && NEW_ENTRY="${NEW_ENTRY}\n### ✨ Features\n$(printf '%b' "$FEATURES")\n"
+          [ -n "$FIXES" ]     && NEW_ENTRY="${NEW_ENTRY}\n### 🐛 Bug Fixes\n$(printf '%b' "$FIXES")\n"
+          [ -n "$DOCS" ]      && NEW_ENTRY="${NEW_ENTRY}\n### 📚 Documentation\n$(printf '%b' "$DOCS")\n"
+          [ -n "$STYLE" ]     && NEW_ENTRY="${NEW_ENTRY}\n### 💄 Styling\n$(printf '%b' "$STYLE")\n"
+          [ -n "$REFACTOR" ]  && NEW_ENTRY="${NEW_ENTRY}\n### ♻️ Refactoring\n$(printf '%b' "$REFACTOR")\n"
+          [ -n "$PERF" ]      && NEW_ENTRY="${NEW_ENTRY}\n### ⚡ Performance\n$(printf '%b' "$PERF")\n"
+          [ -n "$TESTS" ]     && NEW_ENTRY="${NEW_ENTRY}\n### ✅ Tests\n$(printf '%b' "$TESTS")\n"
+          [ -n "$BUILD" ]     && NEW_ENTRY="${NEW_ENTRY}\n### 📦 Build\n$(printf '%b' "$BUILD")\n"
+          [ -n "$CI" ]        && NEW_ENTRY="${NEW_ENTRY}\n### 👷 CI/CD\n$(printf '%b' "$CI")\n"
+          [ -n "$CHORE" ]     && NEW_ENTRY="${NEW_ENTRY}\n### 🔧 Chores\n$(printf '%b' "$CHORE")\n"
+          [ -n "$OTHER" ]     && NEW_ENTRY="${NEW_ENTRY}\n### 📝 Other\n$(printf '%b' "$OTHER")\n"
+
+          # 写入临时文件
+          printf '%b' "$NEW_ENTRY" > /tmp/new_entry.md
+          echo "✅ changelog 条目生成完成"
+          echo "--- 预览 ---"
+          cat /tmp/new_entry.md
+
+      # ── 插入到 CHANGELOG.md ────────────────────────────────────────
+      - name: Update CHANGELOG.md
+        if: steps.changelog.outputs.has_new_commits == 'true'
+        run: |
+          NEW_ENTRY=$(cat /tmp/new_entry.md)
+
+          if [ -f CHANGELOG.md ]; then
+            # 将新条目插入到 "# Changelog" 标题之后，已有内容之前
+            python3 - << 'PYEOF'
+import re
+
+with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+with open('/tmp/new_entry.md', 'r', encoding='utf-8') as f:
+    new_entry = f.read().strip()
+
+# 找到第一个 ## 版本标题的位置，插入新条目
+header_match = re.search(r'^(# Changelog.*?\n)', content, re.MULTILINE)
+if header_match:
+    insert_pos = header_match.end()
+    # 跳过 header 后的空行
+    while insert_pos < len(content) and content[insert_pos] == '\n':
+        insert_pos += 1
+    updated = content[:insert_pos] + '\n' + new_entry + '\n\n' + content[insert_pos:]
+else:
+    updated = '# Changelog\n\n' + new_entry + '\n\n' + content
+
+with open('CHANGELOG.md', 'w', encoding='utf-8') as f:
+    f.write(updated)
+
+print("✅ CHANGELOG.md 更新成功")
+PYEOF
+          else
+            # 文件不存在，直接创建
+            printf '# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n' > CHANGELOG.md
+            cat /tmp/new_entry.md >> CHANGELOG.md
+            printf '\n---\n*Auto-generated by [auto-changelog](.github/workflows/auto-changelog.yml)*\n' >> CHANGELOG.md
+            echo "✅ CHANGELOG.md 创建成功"
+          fi
+
+      # ── 提交并推送 ────────────────────────────────────────────────
+      - name: Commit and push CHANGELOG.md
+        if: steps.changelog.outputs.has_new_commits == 'true'
+        run: |
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "ℹ️ CHANGELOG.md 无变化，跳过提交"
+          else
+            git commit -m "docs: update CHANGELOG for ${{ steps.version.outputs.today }} [${{ steps.version.outputs.sha }}]"
+            git push origin main
+            echo "✅ CHANGELOG.md 已推送"
+          fi
+
+      # ── Summary ──────────────────────────────────────────────────
+      - name: Write summary
+        if: always()
+        run: |
+          echo "## 📋 Auto Changelog 结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本 | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 日期 | ${{ steps.version.outputs.today }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 新 commits | ${{ steps.changelog.outputs.has_new_commits }} |" >> $GITHUB_STEP_SUMMARY
+          if [ -f /tmp/new_entry.md ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 新增条目预览" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/new_entry.md >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
