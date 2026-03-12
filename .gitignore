@@ -30,7 +30,7 @@ package-lock.json
 .history/
 dbm-services/.history/
 dbm-ui/.history/
-
+frontend/.vite/deps_temp_9040c5c9/package.json
 # Environment & Secrets
 .env
 .env.local
