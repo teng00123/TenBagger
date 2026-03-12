@@ -1,0 +1,305 @@
+name: PR Diff Auto Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: ["**"]
+  push:
+    branches: ["**"]
+
+jobs:
+  diff-review:
+    name: Auto Review Code Diff
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # 允许向 PR 写入 review 评论
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史，确保 diff 能正确计算
+
+      # ── 获取 diff ──────────────────────────────────────────────────
+      - name: Get diff content
+        id: diff
+        run: |
+          echo "🔍 获取本次提交的 diff..."
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR 模式：对比 base 和 head
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            echo "PR diff: $BASE -> $HEAD"
+            git diff "$BASE" "$HEAD" \
+              --diff-filter=ACMRT \
+              -- '*.py' '*.js' '*.ts' '*.tsx' '*.jsx' \
+                 '*.java' '*.go' '*.rs' '*.cpp' '*.c' '*.h' \
+                 '*.vue' '*.svelte' '*.rb' '*.php' \
+              > /tmp/pr_diff.txt 2>&1 || true
+          else
+            # Push 模式：对比前一个 commit
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              # 新分支，取最新一个 commit
+              git diff HEAD~1 HEAD \
+                --diff-filter=ACMRT \
+                -- '*.py' '*.js' '*.ts' '*.tsx' '*.jsx' \
+                   '*.java' '*.go' '*.rs' '*.cpp' '*.c' '*.h' \
+                   '*.vue' '*.svelte' '*.rb' '*.php' \
+                > /tmp/pr_diff.txt 2>&1 || true
+            else
+              git diff "$BEFORE" "$AFTER" \
+                --diff-filter=ACMRT \
+                -- '*.py' '*.js' '*.ts' '*.tsx' '*.jsx' \
+                   '*.java' '*.go' '*.rs' '*.cpp' '*.c' '*.h' \
+                   '*.vue' '*.svelte' '*.rb' '*.php' \
+                > /tmp/pr_diff.txt 2>&1 || true
+            fi
+          fi
+
+          DIFF_SIZE=$(wc -c < /tmp/pr_diff.txt)
+          echo "diff_size=$DIFF_SIZE" >> $GITHUB_OUTPUT
+
+          if [ "$DIFF_SIZE" -eq 0 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "ℹ️ 无代码文件变更，跳过审查"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "diff_lines=$(wc -l < /tmp/pr_diff.txt)" >> $GITHUB_OUTPUT
+            echo "✅ diff 获取成功，共 $(wc -l < /tmp/pr_diff.txt) 行"
+          fi
+
+      # ── 静态规则审查（无需 AI，零成本）─────────────────────────────
+      - name: Static diff review
+        id: static_review
+        if: steps.diff.outputs.skip == 'false'
+        run: |
+          echo "🔎 开始静态规则审查..."
+          REPORT=""
+          WARN_COUNT=0
+          ERROR_COUNT=0
+
+          check_pattern() {
+            local pattern="$1"
+            local label="$2"
+            local severity="$3"  # ERROR or WARN
+            local result
+            result=$(grep -nE "$pattern" /tmp/pr_diff.txt | grep "^+" | grep -v "^+++" || true)
+            if [ -n "$result" ]; then
+              if [ "$severity" = "ERROR" ]; then
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+                REPORT="${REPORT}\n❌ **[ERROR] ${label}**\n\`\`\`\n${result}\n\`\`\`\n"
+              else
+                WARN_COUNT=$((WARN_COUNT + 1))
+                REPORT="${REPORT}\n⚠️ **[WARN] ${label}**\n\`\`\`\n${result}\n\`\`\`\n"
+              fi
+            fi
+          }
+
+          # 安全类
+          check_pattern 'print\s*\(.*password|print\s*\(.*secret|print\s*\(.*token' "打印敏感信息" "ERROR"
+          check_pattern '(password|secret|api_key|token)\s*=\s*["\x27][^"\x27]{6,}["\x27]' "硬编码密钥/密码" "ERROR"
+          check_pattern 'eval\s*\(' "使用 eval()（潜在安全风险）" "ERROR"
+          check_pattern 'exec\s*\(' "使用 exec()（潜在安全风险）" "WARN"
+          check_pattern 'subprocess\.call\(.*shell=True|os\.system\(' "Shell 注入风险" "WARN"
+          check_pattern 'verify\s*=\s*False' "SSL 证书校验被关闭" "ERROR"
+
+          # 代码质量类
+          check_pattern 'TODO|FIXME|HACK|XXX' "遗留 TODO/FIXME 注释" "WARN"
+          check_pattern 'console\.log\(|print\(|fmt\.Print' "调试输出未清理" "WARN"
+          check_pattern 'time\.sleep\([0-9]+\)|time\.Sleep\(' "硬编码 sleep（可能影响性能）" "WARN"
+          check_pattern 'except\s*:|except Exception\s*:' "过于宽泛的异常捕获" "WARN"
+          check_pattern '==\s*None|!=\s*None' "建议使用 is/is not 比较 None（Python）" "WARN"
+
+          # 性能类
+          check_pattern 'SELECT \*' "SELECT * 查询（建议指定字段）" "WARN"
+          check_pattern 'for .+ in .+:\s*$' "" ""  # 仅占位，不输出
+          check_pattern '\.append\(.*\)' "" ""      # 仅占位
+
+          # 输出报告
+          echo "error_count=$ERROR_COUNT" >> $GITHUB_OUTPUT
+          echo "warn_count=$WARN_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$ERROR_COUNT" -gt 0 ] || [ "$WARN_COUNT" -gt 0 ]; then
+            # 将报告写入文件供后续步骤使用
+            printf "%b" "$REPORT" > /tmp/static_report.txt
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+            echo "发现 $ERROR_COUNT 个错误，$WARN_COUNT 个警告"
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "✅ 静态审查通过，无问题"
+          fi
+
+      # ── AI 审查（使用 OpenAI / Anthropic API，需配置 Secret）────────
+      - name: AI-powered diff review
+        id: ai_review
+        if: steps.diff.outputs.skip == 'false' && env.AI_REVIEW_ENABLED == 'true'
+        env:
+          AI_REVIEW_ENABLED: ${{ secrets.AI_REVIEW_ENABLED }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "🤖 AI 审查启用中..."
+
+          # 截取 diff（避免超出 token 限制，最多 8000 字符）
+          DIFF_CONTENT=$(head -c 8000 /tmp/pr_diff.txt)
+
+          PROMPT="你是一个专业的代码审查员。请审查以下 git diff，从以下维度给出简洁的中文反馈：
+          1. 🐛 潜在 Bug（逻辑错误、边界条件）
+          2. 🔒 安全风险（注入、认证、权限）
+          3. ⚡ 性能问题（复杂度、资源泄露）
+          4. 📖 可读性（命名、注释、复杂度）
+          5. ✅ 亮点（写得好的地方）
+
+          每项最多 3 条，使用 emoji 标注严重程度（🔴高 🟡中 🟢低）。
+          如果没有问题请直接说"✅ 代码质量良好"。
+
+          diff 内容：
+          \`\`\`diff
+          ${DIFF_CONTENT}
+          \`\`\`"
+
+          AI_RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"model\": \"gpt-4o-mini\",
+              \"messages\": [{\"role\": \"user\", \"content\": $(echo "$PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}],
+              \"max_tokens\": 1000
+            }" 2>/dev/null)
+
+          AI_COMMENT=$(echo "$AI_RESPONSE" | python3 -c "
+          import json, sys
+          try:
+              data = json.load(sys.stdin)
+              print(data['choices'][0]['message']['content'])
+          except:
+              print('AI 审查服务暂时不可用')
+          ")
+
+          echo "$AI_COMMENT" > /tmp/ai_report.txt
+          echo "✅ AI 审查完成"
+
+      # ── 汇总并发布 PR 评论 ────────────────────────────────────────
+      - name: Post review comment to PR
+        if: github.event_name == 'pull_request' && steps.diff.outputs.skip == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const diffLines = '${{ steps.diff.outputs.diff_lines }}';
+            const errorCount = '${{ steps.static_review.outputs.error_count }}' || '0';
+            const warnCount = '${{ steps.static_review.outputs.warn_count }}' || '0';
+            const hasIssues = '${{ steps.static_review.outputs.has_issues }}' === 'true';
+
+            // 读取静态审查报告
+            let staticReport = '';
+            try {
+              staticReport = fs.readFileSync('/tmp/static_report.txt', 'utf8');
+            } catch(e) {}
+
+            // 读取 AI 审查报告
+            let aiReport = '';
+            try {
+              aiReport = fs.readFileSync('/tmp/ai_report.txt', 'utf8');
+            } catch(e) {}
+
+            const statusEmoji = parseInt(errorCount) > 0 ? '❌' : parseInt(warnCount) > 0 ? '⚠️' : '✅';
+            const statusText = parseInt(errorCount) > 0 ? '发现严重问题，请修复后再合并' :
+                               parseInt(warnCount) > 0 ? '存在警告，建议处理' : '审查通过';
+
+            let body = `## 🤖 自动代码审查报告
+
+            **${statusEmoji} ${statusText}**
+
+            | 项目 | 结果 |
+            |------|------|
+            | 变更行数 | ${diffLines} 行 |
+            | 严重问题 | ${errorCount} 个 |
+            | 警告 | ${warnCount} 个 |
+
+            `;
+
+            if (hasIssues && staticReport) {
+              body += `### 📋 静态规则审查详情\n\n${staticReport}\n\n`;
+            } else {
+              body += `### 📋 静态规则审查\n\n✅ 未发现已知问题模式\n\n`;
+            }
+
+            if (aiReport) {
+              body += `### 🤖 AI 智能审查\n\n${aiReport}\n\n`;
+            }
+
+            body += `---\n*由 [PR Diff Auto Review](.github/workflows/pr-diff-review.yml) 自动生成 · ${new Date().toISOString()}*`;
+
+            // 删除旧的 bot 评论（避免刷屏）
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            for (const comment of comments.data) {
+              if (comment.user.type === 'Bot' && comment.body.includes('自动代码审查报告')) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: comment.id,
+                });
+              }
+            }
+
+            // 发布新评论
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body,
+            });
+
+            // 根据结果设置 PR review 状态
+            if (parseInt(errorCount) > 0) {
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                event: 'REQUEST_CHANGES',
+                body: `发现 ${errorCount} 个严重问题，请修复后再合并。详见评论。`,
+              });
+            } else {
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                event: 'COMMENT',
+                body: `自动审查完成，共 ${warnCount} 个警告。`,
+              });
+            }
+
+      # ── 输出 Summary（push 模式下可见）──────────────────────────────
+      - name: Write job summary
+        if: always() && steps.diff.outputs.skip == 'false'
+        run: |
+          echo "## 🤖 PR Diff 自动审查结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 变更行数 | ${{ steps.diff.outputs.diff_lines }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 严重问题 | ${{ steps.static_review.outputs.error_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 警告 | ${{ steps.static_review.outputs.warn_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f /tmp/static_report.txt ]; then
+            echo "### 静态规则审查问题" >> $GITHUB_STEP_SUMMARY
+            cat /tmp/static_report.txt >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── 严重问题时 fail 阻断合并 ──────────────────────────────────
+      - name: Fail on critical issues
+        if: steps.static_review.outputs.error_count != '0'
+        run: |
+          echo "❌ 发现 ${{ steps.static_review.outputs.error_count }} 个严重问题，请修复后重新提交"
+          exit 1
