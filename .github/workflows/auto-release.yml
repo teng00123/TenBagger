@@ -1,0 +1,206 @@
+name: Auto Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'   # 匹配 v1.0.0、v0.2.1 等语义化版本 tag
+
+jobs:
+  create-release:
+    name: Generate Release Notes & Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 允许创建 Release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史，用于生成 changelog
+
+      # ── 解析版本信息 ───────────────────────────────────────────────
+      - name: Parse version info
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"         # e.g. v0.2.0
+          TODAY=$(date '+%Y-%m-%d')
+
+          # 找上一个 tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -1 || echo "")
+
+          echo "tag=${TAG}"           >> $GITHUB_OUTPUT
+          echo "today=${TODAY}"       >> $GITHUB_OUTPUT
+          echo "prev_tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "range=HEAD"         >> $GITHUB_OUTPUT
+            echo "ℹ️ 首个 tag，使用全部历史"
+          else
+            echo "range=${PREV_TAG}..${TAG}" >> $GITHUB_OUTPUT
+            echo "ℹ️ 对比范围：$PREV_TAG → $TAG"
+          fi
+
+      # ── 生成 Release Notes ────────────────────────────────────────
+      - name: Generate release notes
+        id: notes
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          TODAY="${{ steps.version.outputs.today }}"
+          RANGE="${{ steps.version.outputs.range }}"
+          PREV_TAG="${{ steps.version.outputs.prev_tag }}"
+
+          # 拉取 commits（跳过 merge、bot 提交）
+          COMMITS=$(git log "$RANGE" \
+            --pretty=format:"%h|%s|%an|%ad" \
+            --date=short --no-merges \
+            --invert-grep --grep="^docs: update CHANGELOG" \
+            --invert-grep --grep="github-actions\[bot\]" \
+            2>/dev/null || echo "")
+
+          # 检测 Breaking Changes
+          BREAKING=$(git log "$RANGE" --pretty=format:"%h|%B" --no-merges 2>/dev/null \
+            | grep -i "BREAKING CHANGE\|^feat!:\|^fix!:" || true)
+
+          python3 - << PYEOF
+import os
+
+commits_raw = """$COMMITS"""
+breaking_raw = """$BREAKING"""
+tag = "$TAG"
+today = "$TODAY"
+prev_tag = "$PREV_TAG"
+
+features, fixes, docs, style, refactor, perf, tests, build, ci, chore, other = ([] for _ in range(11))
+
+for line in commits_raw.strip().split('\n'):
+    if not line.strip():
+        continue
+    parts = line.split('|', 3)
+    if len(parts) < 4:
+        continue
+    h, subj, author, date = parts
+    entry = f"- {subj} ([{h}]) — {author} · {date}"
+    s = subj.lower()
+    if s.startswith('feat'):       features.append(entry)
+    elif s.startswith('fix'):      fixes.append(entry)
+    elif s.startswith('docs'):     docs.append(entry)
+    elif s.startswith('style'):    style.append(entry)
+    elif s.startswith('refactor'): refactor.append(entry)
+    elif s.startswith('perf'):     perf.append(entry)
+    elif s.startswith('test'):     tests.append(entry)
+    elif s.startswith('build'):    build.append(entry)
+    elif s.startswith('ci'):       ci.append(entry)
+    elif s.startswith('chore'):    chore.append(entry)
+    else:                          other.append(entry)
+
+body = f"## 🚀 {tag} — {today}\n\n"
+
+if breaking_raw.strip():
+    body += "### 💥 Breaking Changes\n"
+    for line in breaking_raw.strip().split('\n'):
+        if line.strip():
+            body += f"- {line.strip()}\n"
+    body += "\n"
+
+if features:   body += "### ✨ Features\n"      + "\n".join(features)   + "\n\n"
+if fixes:      body += "### 🐛 Bug Fixes\n"    + "\n".join(fixes)      + "\n\n"
+if docs:       body += "### 📚 Documentation\n" + "\n".join(docs)       + "\n\n"
+if style:      body += "### 💄 Styling\n"       + "\n".join(style)      + "\n\n"
+if refactor:   body += "### ♻️ Refactoring\n"  + "\n".join(refactor)   + "\n\n"
+if perf:       body += "### ⚡ Performance\n"   + "\n".join(perf)       + "\n\n"
+if tests:      body += "### ✅ Tests\n"          + "\n".join(tests)      + "\n\n"
+if build:      body += "### 📦 Build\n"          + "\n".join(build)      + "\n\n"
+if ci:         body += "### 👷 CI/CD\n"          + "\n".join(ci)         + "\n\n"
+if chore:      body += "### 🔧 Chores\n"         + "\n".join(chore)      + "\n\n"
+if other:      body += "### 📝 Other\n"           + "\n".join(other)      + "\n\n"
+
+if not any([features, fixes, docs, style, refactor, perf, tests, build, ci, chore, other]):
+    body += "_本版本无代码变更_\n\n"
+
+if prev_tag:
+    body += f"---\n**Full Changelog**: https://github.com/${{github.repository}}/compare/{prev_tag}...{tag}"
+else:
+    body += f"---\n**Full Changelog**: https://github.com/${{github.repository}}/blob/main/CHANGELOG.md"
+
+with open('/tmp/release_notes.md', 'w') as f:
+    f.write(body)
+
+print("✅ Release notes 生成完成")
+print("--- 预览 ---")
+print(body[:500])
+PYEOF
+
+      # ── 同步更新 CHANGELOG.md ─────────────────────────────────────
+      - name: Update CHANGELOG.md
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          TAG="${{ steps.version.outputs.tag }}"
+          NEW_ENTRY=$(cat /tmp/release_notes.md)
+
+          if [ -f CHANGELOG.md ]; then
+            python3 - << 'PYEOF'
+import re
+
+with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+with open('/tmp/release_notes.md', 'r', encoding='utf-8') as f:
+    new_entry = f.read().strip()
+
+# 插入到 # Changelog 标题之后
+header_match = re.search(r'^(# Changelog[^\n]*\n)', content, re.MULTILINE)
+if header_match:
+    insert_pos = header_match.end()
+    while insert_pos < len(content) and content[insert_pos] == '\n':
+        insert_pos += 1
+    updated = content[:insert_pos] + '\n' + new_entry + '\n\n' + content[insert_pos:]
+else:
+    updated = '# Changelog\n\n' + new_entry + '\n\n' + content
+
+with open('CHANGELOG.md', 'w', encoding='utf-8') as f:
+    f.write(updated)
+PYEOF
+          else
+            printf '# Changelog\n\n' > CHANGELOG.md
+            cat /tmp/release_notes.md >> CHANGELOG.md
+          fi
+
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "ℹ️ CHANGELOG.md 无变化"
+          else
+            git commit -m "docs: update CHANGELOG for ${{ steps.version.outputs.tag }}"
+            git push origin HEAD:main
+            echo "✅ CHANGELOG.md 已更新"
+          fi
+
+      # ── 发布 GitHub Release ───────────────────────────────────────
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/release_notes.md', 'utf8');
+            const tag = '${{ steps.version.outputs.tag }}';
+            const isPrerelease = tag.includes('-alpha') || tag.includes('-beta') || tag.includes('-rc');
+
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `${tag}`,
+              body: body,
+              draft: false,
+              prerelease: isPrerelease,
+            });
+
+            console.log(`✅ Release 创建成功: ${release.data.html_url}`);
+
+            // 写入 Summary
+            core.summary
+              .addHeading(`🚀 Release ${tag} 发布成功`)
+              .addLink('查看 Release', release.data.html_url)
+              .write();
