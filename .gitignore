@@ -26,3 +26,20 @@ package-lock.json
 .history/
 dbm-services/.history/
 dbm-ui/.history/
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!.env.sample
+!.env.template
+
+# Secret files
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.yml
+secrets.yaml
