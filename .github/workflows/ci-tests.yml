@@ -1,0 +1,117 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ── 后端测试 ──────────────────────────────────────────────────────
+  backend-test:
+    name: Backend Tests (Python)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Copy env example
+        run: cp .env.example .env
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          # 如果还没有测试文件，先做基础 import 检查
+          if [ -d "tests" ]; then
+            pytest tests/ -v --tb=short
+          else
+            echo "⚠️ 暂无测试文件，执行基础导入检查..."
+            python -c "from main import app; print('✅ FastAPI app 导入成功')"
+            python -c "from config import Config; print('✅ Config 导入成功')"
+            python -c "from strategies.ma_strategy import MAStrategy; print('✅ MAStrategy 导入成功')"
+            python -c "from strategies.rsi_strategy import RSIStrategy; print('✅ RSIStrategy 导入成功')"
+          fi
+
+      - name: Lint with flake8 (non-blocking)
+        run: |
+          pip install flake8 || true
+          cd backend
+          flake8 . --max-line-length=120 --exclude=__pycache__ --count --statistics || echo "⚠️ Lint 警告（非阻断）"
+
+  # ── 前端测试 ──────────────────────────────────────────────────────
+  frontend-test:
+    name: Frontend Tests (Node.js)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build check
+        run: |
+          cd frontend
+          npm run build
+          echo "✅ 前端构建成功"
+
+      - name: Run tests (if exist)
+        run: |
+          cd frontend
+          if grep -q '"test"' package.json; then
+            npm run test
+          else
+            echo "⚠️ 暂无前端测试脚本，跳过"
+          fi
+
+  # ── Docker 构建检查 ───────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy env
+        run: cp .env.example .env
+
+      - name: Build backend image
+        run: docker build -t tenbagger-backend:test ./backend
+
+      - name: Build frontend image
+        run: docker build -t tenbagger-frontend:test ./frontend
+
+      - name: Summary
+        run: |
+          echo "## ✅ CI 全部通过" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | 状态 |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Build | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build | ✅ |" >> $GITHUB_STEP_SUMMARY
