@@ -1,9 +1,15 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+# Commit Message Format Check
+# 规则: ^(feat|fix|perf|refactor|docs|test|style|chore)(\(.+\))?: .{1,100} #\d+$
+# 示例: feat(backend): add RSI strategy endpoint #12
+#
+# 仅在 pull_request 事件触发，避免直接 push 到 main 时误报
+# (main 分支应通过 branch protection 强制要求 PR)
 
 name: Commit Message Check
 
-on: [workflow_dispatch, push, pull_request]
+on:
+  pull_request:
+    branches: [ main ]
 
 jobs:
   check-commit-message:
@@ -14,8 +20,9 @@ jobs:
         uses: gsactions/commit-message-checker@v2
         with:
           pattern: '^(feat|fix|perf|refactor|docs|test|style|chore)(\(.+\))?: .{1,100} #\d+$'
-          error: 'Commit message is not standard.'
-          excludeDescription: 'true' # optional: this excludes the description body of a pull request
-          excludeTitle: 'true' # optional: this excludes the title of a pull request
-          checkAllCommitMessages: 'true' # optional: this checks all commits associated with a pull request
+          error: 'Commit message 格式不正确。正确格式: feat(scope): description #issue_number'
+          excludeDescription: 'true'
+          excludeTitle: 'true'
+          checkAllCommitMessages: 'true'
           accessToken: ${{ secrets.GITHUB_TOKEN }}
+
