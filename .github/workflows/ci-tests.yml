@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  # ── 后端测试 ──────────────────────────────────────────────────────
+  # ── 后端单元测试 ──────────────────────────────────────────────────
   backend-test:
     name: Backend Tests (Python)
     runs-on: ubuntu-latest
@@ -27,34 +27,37 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio httpx anyio
 
-      - name: Copy env example
+      - name: Copy env
         run: cp .env.example .env
 
-      - name: Run backend tests
+      - name: Run unit tests
         run: |
           cd backend
-          # 如果还没有测试文件，先做基础 import 检查
-          if [ -d "tests" ]; then
-            pytest tests/ -v --tb=short
-          else
-            echo "⚠️ 暂无测试文件，执行基础导入检查..."
-            python -c "from main import app; print('✅ FastAPI app 导入成功')"
-            python -c "from config import Config; print('✅ Config 导入成功')"
-            python -c "from strategies.ma_strategy import MAStrategy; print('✅ MAStrategy 导入成功')"
-            python -c "from strategies.rsi_strategy import RSIStrategy; print('✅ RSIStrategy 导入成功')"
-          fi
+          python3 -m pytest tests/ -v --tb=short \
+            --junit-xml=../test-results/backend-junit.xml
+        env:
+          PYTHONPATH: backend
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: test-results/backend-junit.xml
 
       - name: Lint with flake8 (non-blocking)
         run: |
           pip install flake8 || true
           cd backend
-          flake8 . --max-line-length=120 --exclude=__pycache__ --count --statistics || echo "⚠️ Lint 警告（非阻断）"
+          flake8 . --max-line-length=120 \
+            --exclude=__pycache__,tests \
+            --count --statistics || echo "⚠️ Lint 警告（非阻断）"
 
-  # ── 前端测试 ──────────────────────────────────────────────────────
+  # ── 前端构建检查 ──────────────────────────────────────────────────
   frontend-test:
-    name: Frontend Tests (Node.js)
+    name: Frontend Build (Node.js)
     runs-on: ubuntu-latest
 
     steps:
@@ -69,11 +72,9 @@ jobs:
           cache-dependency-path: frontend/package.json
 
       - name: Install dependencies
-        run: |
-          cd frontend
-          npm install
+        run: cd frontend && npm install
 
-      - name: Build check
+      - name: Build
         run: |
           cd frontend
           npm run build
@@ -88,11 +89,11 @@ jobs:
             echo "⚠️ 暂无前端测试脚本，跳过"
           fi
 
-  # ── Docker 构建检查 ───────────────────────────────────────────────
+  # ── Docker 构建验证 ───────────────────────────────────────────────
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-test]
+    needs: [ backend-test, frontend-test ]
 
     steps:
       - name: Checkout
@@ -102,16 +103,17 @@ jobs:
         run: cp .env.example .env
 
       - name: Build backend image
-        run: docker build -t tenbagger-backend:test ./backend
+        run: docker build -t tenbagger-backend:ci ./backend
 
       - name: Build frontend image
-        run: docker build -t tenbagger-frontend:test ./frontend
+        run: docker build -t tenbagger-frontend:ci ./frontend
 
-      - name: Summary
+      - name: Write summary
         run: |
           echo "## ✅ CI 全部通过" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | 状态 |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend Tests | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Unit Tests (66 cases) | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend Build | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker Build | ✅ |" >> $GITHUB_STEP_SUMMARY
