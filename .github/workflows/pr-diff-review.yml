@@ -4,8 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: ["**"]
-  push:
-    branches: ["**"]
 
 jobs:
   diff-review:
