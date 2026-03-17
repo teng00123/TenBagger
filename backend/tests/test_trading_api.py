@@ -1,33 +1,53 @@
 """
-tests/test_trading_api.py — Trading Router API 测试
+tests/test_trading_api.py — Trading Router API 测试（SQLite 持久化版）
 """
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from db.database import Base, get_db
 from main import app
-from routers.trading import trading_state
 
 
-@pytest.fixture(autouse=True)
-def reset_trading_state():
-    """每个测试前重置全局交易状态，避免用例间污染"""
+# ── 测试用内存数据库 fixture ──────────────────────────────────────
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_db():
+    """每个测试用例使用独立的 in-memory SQLite，确保隔离"""
+    test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # 初始化账户
+    from db.database import AccountModel
     from config import Config
-    trading_state.capital = Config.INITIAL_CAPITAL
-    trading_state.frozen_capital = 0
-    trading_state.positions.clear()
-    trading_state.orders.clear()
-    trading_state.trade_history.clear()
+    async with TestSession() as s:
+        s.add(AccountModel(id=1, capital=Config.INITIAL_CAPITAL, frozen_capital=0.0))
+        await s.commit()
+
+    async def override_get_db():
+        async with TestSession() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
     yield
+    app.dependency_overrides.clear()
+    await test_engine.dispose()
 
 
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
         transport=ASGITransport(app=app),
-        base_url="http://test"
+        base_url="http://test",
     ) as c:
         yield c
 
+
+# ── 测试类 ────────────────────────────────────────────────────────
 
 class TestAccountAPI:
 
@@ -112,14 +132,12 @@ class TestOrderAPI:
 
     @pytest.mark.asyncio
     async def test_sell_more_than_held_returns_400(self, client):
-        # 先买 10 股
         await client.post("/api/trading/order", json={
             "symbol": "600519.SS",
             "side": "buy",
             "price": 100.0,
             "quantity": 10,
         })
-        # 尝试卖 100 股
         resp = await client.post("/api/trading/order", json={
             "symbol": "600519.SS",
             "side": "sell",
@@ -157,7 +175,7 @@ class TestOrderAPI:
         await client.post("/api/trading/order", json={
             "symbol": "600519.SS",
             "side": "sell",
-            "price": 200.0,   # 卖出价高于买入价
+            "price": 200.0,
             "quantity": 10,
         })
         account = (await client.get("/api/trading/account")).json()
@@ -208,7 +226,7 @@ class TestPositionUpdateAPI:
         })
         resp = await client.post(
             "/api/trading/positions/update",
-            json={"600519.SS": 120.0}
+            json={"600519.SS": 120.0},
         )
         assert resp.status_code == 200
         account = (await client.get("/api/trading/account")).json()
