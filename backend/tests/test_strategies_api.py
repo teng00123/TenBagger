@@ -5,14 +5,6 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from main import app
-from routers.strategies import strategy_cache
-
-
-@pytest.fixture(autouse=True)
-def clear_strategy_cache():
-    strategy_cache.clear()
-    yield
-    strategy_cache.clear()
 
 
 @pytest_asyncio.fixture
@@ -37,6 +29,8 @@ class TestStrategyListAPI:
         types = [s["type"] for s in resp.json()]
         assert "ma" in types
         assert "rsi" in types
+        assert "macd" in types
+        assert "bollinger" in types
 
     @pytest.mark.asyncio
     async def test_list_strategy_has_required_fields(self, client):
