@@ -10,9 +10,9 @@ from routers import trading, strategies
 app = FastAPI(
     title="量化交易平台",
     description="基于 FastAPI 的量化交易后端系统，支持多种交易策略",
-    version="1.0.0",
+    version="0.2.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # 配置 CORS

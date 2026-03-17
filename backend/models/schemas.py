@@ -18,6 +18,8 @@ class OrderStatus(str, Enum):
 class StrategyType(str, Enum):
     MA = "ma"
     RSI = "rsi"
+    MACD = "macd"
+    BOLLINGER = "bollinger"
 
 
 # 策略配置模型
@@ -31,6 +33,13 @@ class StrategyConfig(BaseModel):
     rsi_period: Optional[int] = Field(default=14, description="RSI 周期")
     rsi_oversold: Optional[float] = Field(default=30.0, description="RSI 超卖线")
     rsi_overbought: Optional[float] = Field(default=70.0, description="RSI 超买线")
+    # MACD 策略参数
+    fast_period: Optional[int] = Field(default=12, description="MACD 快线周期")
+    slow_period: Optional[int] = Field(default=26, description="MACD 慢线周期")
+    signal_period: Optional[int] = Field(default=9, description="MACD 信号线周期")
+    # 布林带策略参数
+    bb_period: Optional[int] = Field(default=20, description="布林带均线周期")
+    bb_k: Optional[float] = Field(default=2.0, description="布林带标准差倍数")
 
 
 # 交易信号
