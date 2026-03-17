@@ -3,9 +3,14 @@
     <template #header>
       <div class="card-header">
         <span>📊 策略面板</span>
-        <el-button type="primary" size="small" @click="runAllStrategies" :loading="analyzing">
-          运行所有策略
-        </el-button>
+        <div class="header-actions">
+          <el-button type="primary" size="small" @click="runAllStrategies" :loading="analyzing">
+            运行所有策略
+          </el-button>
+          <el-button size="small" @click="showAdvancedConfig = !showAdvancedConfig">
+            {{ showAdvancedConfig ? '隐藏' : '显示' }}高级配置
+          </el-button>
+        </div>
       </div>
     </template>
 
@@ -22,6 +27,16 @@
         </el-button>
       </el-form-item>
     </el-form>
+
+    <!-- 高级参数配置 -->
+    <el-collapse v-model="activeCollapse" style="margin-top: 20px;">
+      <el-collapse-item title="⚙️ 策略参数详细配置" name="params">
+        <StrategyParamsConfig 
+          v-model="strategyConfig" 
+          @apply="onParamsApply"
+        />
+      </el-collapse-item>
+    </el-collapse>
 
     <el-divider />
 
@@ -146,6 +161,7 @@ import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { strategiesAPI, tradingAPI } from '../api'
 import StrategySelector from './StrategySelector.vue'
+import StrategyParamsConfig from './StrategyParamsConfig.vue'
 
 // ── 状态 ─────────────────────────────────────────────────────────
 const strategyConfig = reactive({
@@ -163,10 +179,12 @@ const strategyConfig = reactive({
   bb_k:           2.0,
 })
 
-const analyzing     = ref(false)
-const strategyStatus = ref(null)
-const tradeSignal   = ref(null)
-const backtestResult = ref(null)
+const analyzing        = ref(false)
+const strategyStatus    = ref(null)
+const tradeSignal      = ref(null)
+const backtestResult    = ref(null)
+const showAdvancedConfig = ref(false)
+const activeCollapse     = ref(['params'])
 
 // ── 辅助函数 ─────────────────────────────────────────────────────
 const getRSIClass = (rsi) => rsi < 30 ? 'positive' : rsi > 70 ? 'negative' : ''
@@ -185,6 +203,11 @@ const onConfigChange = (cfg) => {
   // 切换策略时清空上次结果
   strategyStatus.value = null
   tradeSignal.value    = null
+}
+
+const onParamsApply = (newConfig) => {
+  Object.assign(strategyConfig, newConfig)
+  ElMessage.success('参数已更新，请重新分析市场')
 }
 
 // ── API 调用 ─────────────────────────────────────────────────────
@@ -271,10 +294,15 @@ const runBacktest = async () => {
 <style scoped>
 .strategy-panel { min-height: 600px; }
 
-.card-header {
+.card-header, .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .strategy-status h3,
