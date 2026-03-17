@@ -159,3 +159,51 @@ class TestSymbolsAPI:
         assert "600519.SS" in symbols
         assert "000001.SZ" in symbols
         assert "BTC-USD" in symbols
+
+
+class TestKlineAPI:
+
+    @pytest.mark.asyncio
+    async def test_kline_returns_200(self, client):
+        resp = await client.get("/api/strategies/kline/600519.SS")
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_kline_has_required_keys(self, client):
+        resp = await client.get("/api/strategies/kline/600519.SS")
+        data = resp.json()
+        for key in ("symbol", "dates", "ohlcv", "ma5", "ma20", "latest"):
+            assert key in data, f"缺少字段: {key}"
+
+    @pytest.mark.asyncio
+    async def test_kline_dates_and_ohlcv_same_length(self, client):
+        resp = await client.get("/api/strategies/kline/600519.SS", params={"days": 30})
+        data = resp.json()
+        assert len(data["dates"]) == len(data["ohlcv"])
+        assert len(data["dates"]) == len(data["ma5"])
+        assert len(data["dates"]) == len(data["ma20"])
+
+    @pytest.mark.asyncio
+    async def test_kline_ohlcv_format(self, client):
+        resp = await client.get("/api/strategies/kline/000001.SZ")
+        data = resp.json()
+        # 每条 OHLCV 应有 5 个元素
+        for row in data["ohlcv"]:
+            assert len(row) == 5
+
+    @pytest.mark.asyncio
+    async def test_kline_latest_fields(self, client):
+        resp = await client.get("/api/strategies/kline/BTC-USD")
+        data = resp.json()
+        latest = data["latest"]
+        for field in ("open", "high", "low", "close", "volume"):
+            assert field in latest
+
+    @pytest.mark.asyncio
+    async def test_kline_ma_prefix_none_values(self, client):
+        """MA5 前4个值应为 None（数据不足一个完整窗口）"""
+        resp = await client.get("/api/strategies/kline/600519.SS", params={"days": 30})
+        data = resp.json()
+        assert data["ma5"][0] is None
+        assert data["ma5"][3] is None
+        assert data["ma5"][4] is not None

@@ -24,6 +24,13 @@
             <StrategyPanel />
           </el-col>
         </el-row>
+
+        <!-- K 线图 -->
+        <el-row style="margin-top: 20px;">
+          <el-col :span="24">
+            <CandlestickChart />
+          </el-col>
+        </el-row>
         
         <!-- 底部：交易历史 -->
         <el-row style="margin-top: 20px;">
@@ -41,6 +48,7 @@ import { ref, onMounted } from 'vue'
 import Dashboard from './components/Dashboard.vue'
 import StrategyPanel from './components/StrategyPanel.vue'
 import TradeHistory from './components/TradeHistory.vue'
+import CandlestickChart from './components/CandlestickChart.vue'
 
 const marketStatus = ref('open')
 

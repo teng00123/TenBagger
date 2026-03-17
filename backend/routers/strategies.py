@@ -177,6 +177,69 @@ async def run_backtest(
     )
 
 
+@router.get("/kline/{symbol}")
+async def get_kline_data(
+    symbol: str,
+    days: int = 60,
+    interval: str = "1d",
+):
+    """
+    获取 K 线数据（供前端 CandlestickChart 使用）
+
+    返回 ECharts candlestick 格式：
+    {
+      "dates": ["2024-01-01", ...],
+      "ohlcv": [[open, close, low, high, volume], ...],   # ECharts 约定顺序
+      "ma5":   [float | null, ...],
+      "ma20":  [float | null, ...]
+    }
+    """
+    fetcher = DataFetcher()
+    data = await fetcher.get_historical_data(symbol, days=days, interval=interval)
+
+    if not data:
+        raise HTTPException(status_code=404, detail=f"无法获取 {symbol} 的行情数据")
+
+    closes = np.array([c.close for c in data])
+
+    def ma_series(window: int) -> list:
+        result = []
+        for i in range(len(closes)):
+            if i + 1 < window:
+                result.append(None)
+            else:
+                result.append(round(float(np.mean(closes[i + 1 - window:i + 1])), 4))
+        return result
+
+    dates = [c.timestamp.strftime("%Y-%m-%d") for c in data]
+    # ECharts candlestick data item: [open, close, low, high]
+    ohlcv = [
+        [
+            round(c.open,   4),
+            round(c.close,  4),
+            round(c.low,    4),
+            round(c.high,   4),
+            c.volume,
+        ]
+        for c in data
+    ]
+
+    return {
+        "symbol":  symbol,
+        "dates":   dates,
+        "ohlcv":   ohlcv,
+        "ma5":     ma_series(5),
+        "ma20":    ma_series(20),
+        "latest":  {
+            "open":   data[-1].open,
+            "high":   data[-1].high,
+            "low":    data[-1].low,
+            "close":  data[-1].close,
+            "volume": data[-1].volume,
+        },
+    }
+
+
 @router.get("/symbols")
 async def get_supported_symbols():
     """获取支持的交易标的"""

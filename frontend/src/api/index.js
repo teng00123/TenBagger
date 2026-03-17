@@ -81,6 +81,13 @@ export const strategiesAPI = {
     return api.post('/strategies/backtest', config, { params: { days } })
   },
   
+  // 获取 K 线数据
+  getKlineData(symbol, days = 60, interval = '1d') {
+    return api.get(`/strategies/kline/${encodeURIComponent(symbol)}`, {
+      params: { days, interval },
+    })
+  },
+
   // 获取支持的标的
   getSupportedSymbols() {
     return api.get('/strategies/symbols')
