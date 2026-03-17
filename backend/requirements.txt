@@ -9,3 +9,6 @@ aiohttp>=3.13.3
 # v0.2 task-1: 真实行情数据
 yfinance>=1.2.0
 akshare>=1.18.0
+# v0.2 task-5: SQLite 持久化
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
