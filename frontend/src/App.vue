@@ -31,6 +31,13 @@
             <CandlestickChart />
           </el-col>
         </el-row>
+
+        <!-- 回测可视化 -->
+        <el-row style="margin-top: 20px;">
+          <el-col :span="24">
+            <BacktestVisualization />
+          </el-col>
+        </el-row>
         
         <!-- 底部：交易历史 -->
         <el-row style="margin-top: 20px;">
@@ -49,6 +56,7 @@ import Dashboard from './components/Dashboard.vue'
 import StrategyPanel from './components/StrategyPanel.vue'
 import TradeHistory from './components/TradeHistory.vue'
 import CandlestickChart from './components/CandlestickChart.vue'
+import BacktestVisualization from './components/BacktestVisualization.vue'
 
 const marketStatus = ref('open')
 

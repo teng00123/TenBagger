@@ -259,6 +259,7 @@ const executeTrade = async () => {
 const runBacktest = async () => {
   try {
     const result = await strategiesAPI.runBacktest({ ...strategyConfig }, 60)
+        backtestResult.value = result.summary  // 保持向后兼容
     backtestResult.value = result
     ElMessage.success('回测完成')
   } catch (e) {
