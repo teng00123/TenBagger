@@ -258,23 +258,4 @@ async def get_supported_symbols():
     )
 
 
-@router.get("/kline/{symbol}")
-async def get_kline_data(symbol: str, days: int = 60):
-    """获取 K 线数据（供前端图表使用）"""
-    fetcher = DataFetcher()
-    data = await fetcher.get_historical_data(symbol, days=days)
-    return APIResponse(
-        success=True,
-        message="K 线数据获取成功",
-        data=[
-            {
-                "timestamp": c.timestamp.isoformat(),
-                "open":   c.open,
-                "high":   c.high,
-                "low":    c.low,
-                "close":  c.close,
-                "volume": c.volume,
-            }
-            for c in data
-        ],
-    )
+
